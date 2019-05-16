@@ -540,8 +540,8 @@ class OldSoundRabbitMqExtension extends Extension
             if ($this->collectorEnabled) {
                 $this->injectLoggedChannel($definition, $key, $client['connection']);
             }
-            if (array_key_exists('unserializer', $client)) {
-                $definition->addMethodCall('setUnserializer', array($client['unserializer']));
+            if (array_key_exists('serializer', $client)) {
+	            $definition->addMethodCall('setSerializer', [new Reference("old_sound_rabbit_mq.serializer.{$client['serializer']}")]);
             }
             if (array_key_exists('direct_reply_to', $client)) {
                 $definition->addMethodCall('setDirectReplyTo', array($client['direct_reply_to']));
@@ -580,7 +580,7 @@ class OldSoundRabbitMqExtension extends Extension
                 $definition->addMethodCall('setQueueOptions', array($server['queue_options']));
             }
             if (array_key_exists('serializer', $server)) {
-                $definition->addMethodCall('setSerializer', array($server['serializer']));
+	            $definition->addMethodCall('setSerializer', [new Reference("old_sound_rabbit_mq.serializer.{$server['serializer']}")]);
             }
             $this->container->setDefinition(sprintf('old_sound_rabbit_mq.%s_server', $key), $definition);
         }

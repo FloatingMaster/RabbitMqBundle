@@ -2,11 +2,16 @@
 
 namespace OldSound\RabbitMqBundle\RabbitMq;
 
+use OldSound\RabbitMqBundle\Serializer\NativeSerializer;
+use OldSound\RabbitMqBundle\Serializer\SerializerInterface;
 use PhpAmqpLib\Message\AMQPMessage;
 
 class RpcServer extends BaseConsumer
 {
-    private $serializer = 'serialize';
+	/**
+	 * @var SerializerInterface
+	 */
+    protected $serializer;
 
     public function initServer($name)
     {
@@ -18,8 +23,17 @@ class RpcServer extends BaseConsumer
     {
         try {
             $msg->delivery_info['channel']->basic_ack($msg->delivery_info['delivery_tag']);
+
+	        if (null !== $this->serializer) {
+	            $msg->setBody($this->serializer->deserialize($msg->getBody(), $msg->delivery_info['class'] ?? null));
+            }
+
             $result = call_user_func($this->callback, $msg);
-            $result = call_user_func($this->serializer, $result);
+
+	        if (null !== $this->serializer) {
+		        $result = $this->serializer->serialize($result);
+	        }
+
             $this->sendReply($result, $msg->get('reply_to'), $msg->get('correlation_id'));
             $this->consumed++;
             $this->maybeStopConsumer();
@@ -34,8 +48,17 @@ class RpcServer extends BaseConsumer
         $this->getChannel()->basic_publish($reply, '', $client);
     }
 
-    public function setSerializer($serializer)
+    public function setSerializer(SerializerInterface $serializer)
     {
         $this->serializer = $serializer;
     }
+
+	public function getSerializer()
+	{
+		if (null === $this->serializer) {
+			$this->serializer = new NativeSerializer();
+		}
+
+		return $this->serializer;
+	}
 }

@@ -71,6 +71,13 @@
         <service id="old_sound_rabbit_mq.command.std_in_producer_command" class="OldSound\RabbitMqBundle\Command\StdInProducerCommand">
             <tag name="console.command" command="rabbitmq:stdin-producer" />
         </service>
+
+        <service id="old_sound_rabbit_mq.serializer.native" class="OldSound\RabbitMqBundle\Serializer\NativeSerializer" />
+        <service id="old_sound_rabbit_mq.serializer.json" class="OldSound\RabbitMqBundle\Serializer\JsonSerializer" />
+
+        <service id="old_sound_rabbit_mq.serializer.jms" class="OldSound\RabbitMqBundle\Serializer\JMSSerializerBridge" >
+            <argument type="service" id="jms_serializer" on-invalid="ignore"/>
+        </service>
     </services>
 
 </container>

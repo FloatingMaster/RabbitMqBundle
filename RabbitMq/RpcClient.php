@@ -2,6 +2,8 @@
 
 namespace OldSound\RabbitMqBundle\RabbitMq;
 
+use OldSound\RabbitMqBundle\Serializer\NativeSerializer;
+use OldSound\RabbitMqBundle\Serializer\SerializerInterface;
 use PhpAmqpLib\Message\AMQPMessage;
 
 class RpcClient extends BaseAmqp
@@ -13,9 +15,13 @@ class RpcClient extends BaseAmqp
     protected $notifyCallback;
 
     private $queueName;
-    private $unserializer = 'unserialize';
     private $directReplyTo;
     private $directConsumerTag;
+
+	/**
+	 * @var SerializerInterface
+	 */
+    protected $serializer;
 
     public function initClient($expectSerializedResponse = true)
     {
@@ -38,13 +44,25 @@ class RpcClient extends BaseAmqp
             }
         }
 
-        $msg = new AMQPMessage($msgBody, array('content_type' => 'text/plain',
-                                               'reply_to' => $this->directReplyTo
-                                                   ? 'amq.rabbitmq.reply-to' // On direct reply-to mode, use predefined queue name
-                                                   : $this->getQueueName(),
-                                               'delivery_mode' => 1, // non durable
-                                               'expiration' => $expiration*1000,
-                                               'correlation_id' => $requestId));
+	    $properties = [
+		    'content_type'   => 'text/plain',
+		    'reply_to'       => $this->directReplyTo
+			    ? 'amq.rabbitmq.reply-to' // On direct reply-to mode, use predefined queue name
+			    : $this->getQueueName(),
+		    'delivery_mode'  => 1, // non durable
+		    'expiration'     => $expiration * 1000,
+		    'correlation_id' => $requestId
+	    ];
+
+        if (is_object($msgBody)) {
+            $properties['class'] = get_class($msgBody);
+        }
+
+        if (null !== $this->serializer) {
+	        $msgBody = $this->serializer->serialize($msgBody);
+        }
+
+	    $msg = new AMQPMessage($msgBody, $properties);
 
         $this->getChannel()->basic_publish($msg, $server, $routingKey);
 
@@ -78,9 +96,11 @@ class RpcClient extends BaseAmqp
     public function processMessage(AMQPMessage $msg)
     {
         $messageBody = $msg->body;
+
         if ($this->expectSerializedResponse) {
-            $messageBody = call_user_func($this->unserializer, $messageBody);
+	        $messageBody = $this->serializer->deserialize($messageBody, $msg->delivery_info['class'] ?? null);
         }
+
         if ($this->notifyCallback !== null) {
             call_user_func($this->notifyCallback, $messageBody);
         }
@@ -97,9 +117,9 @@ class RpcClient extends BaseAmqp
         return $this->queueName;
     }
 
-    public function setUnserializer($unserializer)
+    public function setSerializer(SerializerInterface $serializer)
     {
-        $this->unserializer = $unserializer;
+    	$this->serializer = $serializer;
     }
 
     public function notify($callback)
